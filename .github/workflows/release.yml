@@ -24,6 +24,14 @@ jobs:
             --transform "s,^,dotsync-${VERSION}/," \
             bin/ tests/ examples/ install.sh README.md LICENSE
 
+      - name: Verify tarball
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          tmpdir=$(mktemp -d)
+          tar xzf "dotsync-${VERSION}.tar.gz" -C "$tmpdir"
+          bash "$tmpdir/dotsync-${VERSION}/tests/dotsync-test"
+          rm -rf "$tmpdir"
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
