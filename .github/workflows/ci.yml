@@ -28,5 +28,8 @@ jobs:
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get install -y rsync diffutils
+      - name: Install bash (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash
       - name: Run tests
         run: bash tests/dotsync-test
