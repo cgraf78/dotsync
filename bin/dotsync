@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# dotsync — bidirectional file sync across hosts via rsync + SSH.
+# dotsync — keep your shell environment in sync across machines via rsync + SSH.
 #
-# Syncs files listed in manifest files across configured hosts. Designed for
-# dotfiles and config that live outside version control.
+# Syncs dotfiles and config listed in manifests across configured hosts,
+# keeping your shell environment consistent on every machine.
 #
 # Usage: dotsync push <host>   rsync listed files TO host
 #        dotsync pull <host>   rsync listed files FROM host

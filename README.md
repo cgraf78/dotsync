@@ -1,8 +1,8 @@
 # dotsync
 
-Bidirectional file sync across hosts via rsync + SSH.
+Keep your shell environment in sync across multiple machines via rsync + SSH.
 
-Syncs files listed in manifests across configured hosts. Designed for dotfiles and config that live outside version control — no special server or daemon required, just SSH.
+Manages dotfiles and config that need to stay consistent across hosts — automates pushing updates so all your machines have the same settings. No special server or daemon required, just SSH.
 
 ## Quick Start
 
