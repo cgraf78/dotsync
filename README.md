@@ -1,5 +1,10 @@
 # dotsync
 
+[![CI](https://github.com/cgraf78/dotsync/actions/workflows/ci.yml/badge.svg)](https://github.com/cgraf78/dotsync/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/cgraf78/dotsync)](https://github.com/cgraf78/dotsync/releases)
+[![License](https://img.shields.io/github/license/cgraf78/dotsync)](LICENSE)
+[![Bash 4+](https://img.shields.io/badge/bash-4%2B-blue)](https://www.gnu.org/software/bash/)
+
 Keep your shell environment in sync across multiple machines via rsync + SSH.
 
 Manages dotfiles and config that need to stay consistent across hosts — automates pushing updates so all your machines have the same settings. No special server or daemon required, just SSH.
