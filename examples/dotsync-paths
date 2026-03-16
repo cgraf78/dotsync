@@ -1,0 +1,21 @@
+# Personal files to sync (one path per line, relative to $HOME)
+.bashrc
+.bash_profile
+.bash_aliases
+.inputrc
+.tmux.conf
+.config/dotsync
+
+# Excludes
+!*/__pycache__
+!*.pyc
+!*.pyo
+!*.swp
+!*.swo
+!*~
+!*.bak
+!*.tmp
+!*.log
+!*.DS_Store
+!*/.git
+!*.conflict.*

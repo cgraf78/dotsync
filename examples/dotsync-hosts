@@ -1,0 +1,4 @@
+# alias    ssh-destination
+server1    server1.example.com
+laptop     laptop.local
+nas        nas.example.net
