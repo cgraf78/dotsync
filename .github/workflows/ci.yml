@@ -14,15 +14,19 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
       - name: Lint dotsync
-        run: shellcheck bin/dotsync
+        run: shellcheck -x bin/dotsync
       - name: Lint tests
-        run: shellcheck tests/dotsync-test tests/test-helpers.sh
+        run: shellcheck -x -P tests tests/dotsync-test tests/test-helpers.sh
 
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get install -y rsync diffutils
       - name: Run tests
         run: bash tests/dotsync-test

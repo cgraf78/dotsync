@@ -174,6 +174,7 @@ result=$(_load_paths 2>/dev/null)
 _assert_contains "accepts .valid_file" ".valid_file" "$result"
 _assert_contains "accepts .normal_file" ".normal_file" "$result"
 _assert_not_contains "rejects absolute path" "/etc/passwd" "$result"
+# shellcheck disable=SC2088  # intentional literal tilde in test string
 _assert_not_contains "rejects tilde path" "~/.ssh/id_rsa" "$result"
 _assert_not_contains "rejects ../ traversal" "../../../etc/shadow" "$result"
 _assert_not_contains "rejects embedded ../ traversal" ".config/../../../etc/shadow" "$result"
@@ -789,7 +790,7 @@ EOF
         _assert_contains "non-self host synced" "testhost" "$result"
 
         # Cleanup integration test files
-        rm -rf "$HOME/$TEST_REL"
+        rm -rf "${HOME:?}/${TEST_REL:?}"
     fi
 
     # Restore test HOME for summary

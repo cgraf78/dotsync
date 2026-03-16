@@ -33,6 +33,13 @@
 
 set -euo pipefail
 
+# Requires bash 4+ for associative arrays and mapfile.
+if ((BASH_VERSINFO[0] < 4)); then
+    echo "dotsync: requires bash 4+ (found ${BASH_VERSION})" >&2
+    echo "  macOS: install via 'brew install bash'" >&2
+    exit 1
+fi
+
 CONF_DIR="${DOTSYNC_CONF_DIR:-$HOME/.config/dotsync}"
 STATE_DIR="${DOTSYNC_STATE_DIR:-$HOME/.local/share/dotsync}"
 LOCK_FILE="$STATE_DIR/.lock"

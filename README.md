@@ -23,6 +23,7 @@ dotsync sync                  # bidirectional sync with all reachable hosts
 
 ## Prerequisites
 
+- Bash 4+ (macOS: `brew install bash`)
 - SSH key access between machines (configure ports/keys in `~/.ssh/config`)
 - `rsync` and `md5sum` on each host (standard on Linux; macOS has `md5`)
 - Optional: `diff3` for 3-way merge (falls back to conflict-copy if missing)
