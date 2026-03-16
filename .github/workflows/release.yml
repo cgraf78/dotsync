@@ -13,10 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: bash tests/dotsync-test
+
+      - name: Create tarball
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          tar czf "dotsync-${VERSION}.tar.gz" \
+            --transform "s,^,dotsync-${VERSION}/," \
+            bin/ tests/ examples/ install.sh README.md LICENSE
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          files: dotsync-*.tar.gz
           generate_release_notes: true
-          files: |
-            bin/dotsync
-            install.sh
