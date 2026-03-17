@@ -27,6 +27,6 @@ fi
 echo "done."
 echo ""
 echo "Next steps:"
-echo "  1. Edit $CONF_DIR/dotsync-hosts with your SSH hosts"
+echo "  1. Edit $CONF_DIR/dotsync-hosts with your SSH host aliases"
 echo "  2. Edit $CONF_DIR/dotsync-paths with files to sync"
 echo "  3. Run: dotsync push <host>"

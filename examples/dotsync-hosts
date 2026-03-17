@@ -1,4 +1,4 @@
-# alias    ssh-destination
-server1    server1.example.com
-laptop     laptop.local
-nas        nas.example.net
+# host aliases (SSH destinations come from ~/.ssh/config)
+server1
+laptop
+nas

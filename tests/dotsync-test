@@ -200,42 +200,51 @@ echo ""
 echo "=== Host parsing ==="
 
 cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
-# alias    ssh-destination
-fileserver        fileserver.example.net
-server1    server1.example.com
+# host aliases
+fileserver
+server1
 EOF
 result=$(_load_hosts)
-_assert_contains "loads fileserver" "fileserver fileserver.example.net" "$result"
-_assert_contains "loads server1" "server1 server1.example.com" "$result"
+_assert_contains "loads fileserver" "fileserver" "$result"
+_assert_contains "loads server1" "server1" "$result"
 
 # Test: work hosts merged
 cat > "$CONF_DIR/dotsync-hosts-work" <<'EOF'
-dev1       dev1.example.com
+dev1
 EOF
 result=$(_load_hosts)
-_assert_contains "merges work host" "dev1 dev1.example.com" "$result"
+_assert_contains "merges work host" "dev1" "$result"
 
 # Test: duplicate alias
 cat > "$CONF_DIR/dotsync-hosts-work" <<'EOF'
-fileserver        other.fileserver.com
-dev1       dev1.example.com
+fileserver
+dev1
 EOF
 result=$(_load_hosts)
-count=$(echo "$result" | grep -c '^fileserver ')
+count=$(echo "$result" | grep -c '^fileserver$')
 _assert_eq "deduplicates fileserver alias" "1" "$count"
-_assert_contains "first occurrence wins" "fileserver.example.net" "$result"
 
-# Test: host resolution
+# Test: host resolution (uses ssh -G; unknown hosts fall back to themselves)
 dest=$(_resolve_host "fileserver")
-_assert_eq "resolves alias to destination" "fileserver.example.net" "$dest"
+_assert_eq "unknown alias falls back to itself" "fileserver" "$dest"
 
 dest=$(_resolve_host "unknown.server.com")
 _assert_eq "falls back to literal" "unknown.server.com" "$dest"
 
+# Test: DOTSYNC_SSH_CONFIG override
+RESOLVE_TEST_SSH=$(_tmpdir)/ssh_config
+cat > "$RESOLVE_TEST_SSH" <<'EOF'
+Host testresolved
+    Hostname resolved.example.com
+EOF
+DOTSYNC_SSH_CONFIG="$RESOLVE_TEST_SSH" dest=$(_resolve_host "testresolved")
+_assert_eq "resolves via custom SSH config" "resolved.example.com" "$dest"
+rm -f "$RESOLVE_TEST_SSH"
+
 # Test: host tier detection
 # Reset work hosts to avoid leftover from duplicate alias test
 cat > "$CONF_DIR/dotsync-hosts-work" <<'EOF'
-dev1       dev1.example.com
+dev1
 EOF
 
 tier=$(_host_tier "fileserver")
@@ -681,8 +690,16 @@ if [[ $INTEGRATION -eq 1 ]]; then
         cat > "$CONF_DIR/dotsync-paths" <<EOF
 $TEST_REL/file_a
 EOF
+        # Map testhost → localhost via a temporary SSH config
+        INT_SSH_CONFIG=$(_tmpdir)/ssh_config
+        cat > "$INT_SSH_CONFIG" <<'EOF'
+Host testhost
+    Hostname localhost
+EOF
+        export DOTSYNC_SSH_CONFIG="$INT_SSH_CONFIG"
+
         cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
-testhost   localhost
+testhost
 EOF
 
         # ---------------------------------------------------------------
@@ -781,9 +798,16 @@ EOF
 
         # Configure current machine as a host — should be skipped
         local_fqdn=$(hostname -f 2>/dev/null || hostname)
-        cat > "$CONF_DIR/dotsync-hosts" <<EOF
-self       $local_fqdn
-testhost   localhost
+        cat > "$INT_SSH_CONFIG" <<EOF
+Host testhost
+    Hostname localhost
+
+Host self
+    Hostname $local_fqdn
+EOF
+        cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
+self
+testhost
 EOF
         result=$(_do_sync 2>&1)
         _assert_not_contains "self host skipped from sync" "self ($local_fqdn):" "$result"
@@ -791,6 +815,8 @@ EOF
 
         # Cleanup integration test files
         rm -rf "${HOME:?}/${TEST_REL:?}"
+        rm -f "$INT_SSH_CONFIG"
+        unset DOTSYNC_SSH_CONFIG
     fi
 
     # Restore test HOME for summary

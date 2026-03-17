@@ -30,7 +30,7 @@ cd dotsync && bash install.sh
 
 ```bash
 # Configure
-echo "server1 server1.example.com" >> ~/.config/dotsync/dotsync-hosts
+echo "server1" >> ~/.config/dotsync/dotsync-hosts
 echo ".bashrc" >> ~/.config/dotsync/dotsync-paths
 
 # Sync
@@ -66,13 +66,24 @@ Config lives in `$DOTSYNC_CONF_DIR` (default `~/.config/dotsync/`).
 
 ### Hosts
 
-Format: `alias ssh-destination`, one per line.
+One alias per line. SSH destinations are resolved from `~/.ssh/config`.
 
 ```
 # ~/.config/dotsync/dotsync-hosts
-server1    server1.example.com
-laptop     laptop.local
-nas        nas.example.net
+server1
+laptop
+nas
+```
+
+Ensure each alias has a corresponding `Host` entry in `~/.ssh/config`:
+
+```
+# ~/.ssh/config
+Host server1
+    Hostname server1.example.com
+
+Host laptop
+    Hostname laptop.local
 ```
 
 Two tiers for host-based path filtering:
