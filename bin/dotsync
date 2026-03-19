@@ -708,7 +708,7 @@ _do_push() {
     echo "pushing ${#files_arr[@]} file(s) to $host_arg ($dest)..."
     local remote_links
     remote_links=$(_record_remote_symlinks "$dest" "${files_arr[@]}")
-    if rsync -avzLc --no-owner --no-group --files-from=<(printf '%s\n' "${files_arr[@]}") "$HOME/" "$dest:" 2>&1; then
+    if rsync -avzL --no-owner --no-group --files-from=<(printf '%s\n' "${files_arr[@]}") "$HOME/" "$dest:" 2>&1; then
         [[ -n "$remote_links" ]] && echo "$remote_links" | _restore_remote_symlinks "$dest"
         for f in "${files_arr[@]}"; do
             local md5hash
@@ -753,7 +753,7 @@ _do_pull() {
     echo "pulling ${#files_arr[@]} file(s) from $host_arg ($dest)..."
     local local_links
     local_links=$(_record_local_symlinks "${files_arr[@]}")
-    if rsync -avzLc --no-owner --no-group --files-from=<(printf '%s\n' "${files_arr[@]}") "$dest:" "$HOME/" 2>&1; then
+    if rsync -avzL --no-owner --no-group --files-from=<(printf '%s\n' "${files_arr[@]}") "$dest:" "$HOME/" 2>&1; then
         [[ -n "$local_links" ]] && echo "$local_links" | _restore_local_symlinks
         for f in "${files_arr[@]}"; do
             local md5hash
@@ -990,7 +990,7 @@ _sync_host() {
     if [[ ${#push_files[@]} -gt 0 ]]; then
         local remote_links
         remote_links=$(_record_remote_symlinks "$dest" "${push_files[@]}")
-        if rsync -azLc --no-owner --no-group --files-from=<(printf '%s\n' "${push_files[@]}") "$HOME/" "$dest:" 2>/dev/null; then
+        if rsync -azL --no-owner --no-group --files-from=<(printf '%s\n' "${push_files[@]}") "$HOME/" "$dest:" 2>/dev/null; then
             [[ -n "$remote_links" ]] && echo "$remote_links" | _restore_remote_symlinks "$dest"
             for f in "${push_files[@]}"; do
                 local md5hash
@@ -1007,7 +1007,7 @@ _sync_host() {
     if [[ ${#pull_files[@]} -gt 0 ]]; then
         local local_links
         local_links=$(_record_local_symlinks "${pull_files[@]}")
-        if rsync -azLc --no-owner --no-group --files-from=<(printf '%s\n' "${pull_files[@]}") "$dest:" "$HOME/" 2>/dev/null; then
+        if rsync -azL --no-owner --no-group --files-from=<(printf '%s\n' "${pull_files[@]}") "$dest:" "$HOME/" 2>/dev/null; then
             [[ -n "$local_links" ]] && echo "$local_links" | _restore_local_symlinks
             for f in "${pull_files[@]}"; do
                 local md5hash
@@ -1073,7 +1073,7 @@ _sync_host() {
         # Fetch remote version to a temp file
         local remote_tmp
         remote_tmp=$(mktemp)
-        rsync -azLc --no-owner --no-group "$dest:$f" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; had_errors=1; continue; }
+        rsync -azL --no-owner --no-group "$dest:$f" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; had_errors=1; continue; }
 
         # Binary files can't be merged — save conflict copy
         if _is_binary "$HOME/$f"; then
@@ -1096,7 +1096,7 @@ _sync_host() {
                 cp "$HOME/$f" "$backup_tmp"
                 cp "$merged_tmp" "$HOME/$f"
                 [[ -n "$local_links" ]] && echo "$local_links" | _restore_local_symlinks
-                if rsync -azLc --no-owner --no-group "$HOME/$f" "$dest:$f" 2>/dev/null; then
+                if rsync -azL --no-owner --no-group "$HOME/$f" "$dest:$f" 2>/dev/null; then
                     [[ -n "$remote_links" ]] && echo "$remote_links" | _restore_remote_symlinks "$dest"
                     local md5hash
                     md5hash=$(_md5 "$HOME/$f")
@@ -1137,7 +1137,7 @@ _sync_host() {
             # automatically because the deletion was intentional.
             local remote_tmp
             remote_tmp=$(mktemp)
-            rsync -azLc --no-owner --no-group "$dest:$path" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; continue; }
+            rsync -azL --no-owner --no-group "$dest:$path" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; continue; }
             cp "$remote_tmp" "$HOME/$path.conflict.$host_alias"
             rm -f "$remote_tmp"
             echo "  conflict (deleted locally, modified remotely): $path → saved $path.conflict.$host_alias" >&2
@@ -1145,7 +1145,7 @@ _sync_host() {
             # Modified locally but deleted remotely — the local edits take
             # priority. Push the local file back to the remote to "undo" the
             # remote deletion. State only saved on successful push.
-            if rsync -azLc --no-owner --no-group "$HOME/$path" "$dest:$path" 2>/dev/null; then
+            if rsync -azL --no-owner --no-group "$HOME/$path" "$dest:$path" 2>/dev/null; then
                 local md5hash
                 md5hash=$(_md5 "$HOME/$path")
                 [[ -n "$md5hash" ]] && _save_state "$host_alias" "$path" "$HOME/$path" "$md5hash"
