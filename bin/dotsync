@@ -1296,13 +1296,16 @@ _dotsync() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     COMPREPLY=()
+
     [[ "$prev" == "init" ]] && { COMPREPLY=($(compgen -W "bash" -- "$cur")); return; }
+
     local subcmd="" word
     for word in "${COMP_WORDS[@]:1:$((COMP_CWORD - 1))}"; do
         case "$word" in
             push|pull|sync|diff|list|hosts|init) subcmd="$word"; break ;;
         esac
     done
+
     case "$subcmd" in
         push|pull|diff)
             local conf="${DOTSYNC_CONF_DIR:-$HOME/.config/dotsync}" hosts="" host f
@@ -1323,6 +1326,7 @@ _dotsync() {
 complete -F _dotsync dotsync
 INIT_EOF
 }
+
 if [[ "${1:-}" == "init" ]]; then
     _do_init "${2:-}"
     exit 0
