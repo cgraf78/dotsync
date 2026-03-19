@@ -1274,9 +1274,59 @@ _usage() {
     echo "       dotsync diff <host>   dry-run showing what sync would do"
     echo "       dotsync list          show all paths from all manifests"
     echo "       dotsync hosts         show configured hosts"
+    echo "       dotsync init bash     print shell integration snippet"
     echo ""
     echo "Flags: --dry-run, -n         show what would be done without changes"
 }
+
+# init needs no external deps and must run even when DOTSYNC_SOURCED is set.
+_do_init() {
+    local shell="${1:-}"
+    if [[ -z "$shell" ]]; then
+        echo "dotsync: init requires a shell name (e.g., dotsync init bash)" >&2
+        exit 1
+    fi
+    if [[ "$shell" != "bash" ]]; then
+        echo "dotsync: unsupported shell '$shell' (supported: bash)" >&2
+        exit 1
+    fi
+    cat <<'INIT_EOF'
+_dotsync() {
+    local cur prev
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    COMPREPLY=()
+    [[ "$prev" == "init" ]] && { COMPREPLY=($(compgen -W "bash" -- "$cur")); return; }
+    local subcmd="" word
+    for word in "${COMP_WORDS[@]:1:$((COMP_CWORD - 1))}"; do
+        case "$word" in
+            push|pull|sync|diff|list|hosts|init) subcmd="$word"; break ;;
+        esac
+    done
+    case "$subcmd" in
+        push|pull|diff)
+            local conf="${DOTSYNC_CONF_DIR:-$HOME/.config/dotsync}" hosts="" host f
+            for f in "$conf/dotsync-hosts" "$conf/dotsync-hosts-work"; do
+                [[ -f "$f" ]] || continue
+                while IFS= read -r host; do
+                    [[ -z "$host" || "$host" == '#'* ]] && continue
+                    hosts+=" $host"
+                done < "$f"
+            done
+            COMPREPLY=($(compgen -W "$hosts" -- "$cur"))
+            ;;
+        "")
+            COMPREPLY=($(compgen -W "push pull sync diff list hosts init --dry-run -n" -- "$cur"))
+            ;;
+    esac
+}
+complete -F _dotsync dotsync
+INIT_EOF
+}
+if [[ "${1:-}" == "init" ]]; then
+    _do_init "${2:-}"
+    exit 0
+fi
 
 # When sourced for testing, export functions but skip arg parsing and execution.
 if [[ -n "${DOTSYNC_SOURCED:-}" ]]; then

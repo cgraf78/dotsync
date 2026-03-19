@@ -565,6 +565,17 @@ rm -rf "$TEST_HOME/.config/foo"
 result=$(_do_hosts)
 _assert_contains "hosts shows fileserver" "fileserver" "$result"
 
+# init subcommand
+result=$("$SCRIPT_DIR/../bin/dotsync" init bash 2>&1)
+_assert_contains "init bash: outputs complete call" "complete -F _dotsync dotsync" "$result"
+_assert_contains "init bash: outputs completion function" "_dotsync()" "$result"
+
+result=$("$SCRIPT_DIR/../bin/dotsync" init 2>&1 || true)
+_assert_contains "init no shell: requires shell name" "requires a shell name" "$result"
+
+result=$("$SCRIPT_DIR/../bin/dotsync" init zsh 2>&1 || true)
+_assert_contains "init zsh: unsupported shell error" "unsupported shell" "$result"
+
 # ---------------------------------------------------------------------------
 # Tests: Symlink preservation
 # ---------------------------------------------------------------------------
