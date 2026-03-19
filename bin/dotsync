@@ -1141,7 +1141,7 @@ _sync_host() {
             # automatically because the deletion was intentional.
             local remote_tmp
             remote_tmp=$(mktemp)
-            rsync -azL --no-owner --no-group "$dest:$path" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; continue; }
+            rsync -azL --no-owner --no-group "$dest:$path" "$remote_tmp" 2>/dev/null || { rm -f "$remote_tmp"; had_errors=1; echo "  conflict (deleted locally, modified remotely): $path → failed to fetch remote" >&2; continue; }
             cp "$remote_tmp" "$HOME/$path.conflict.$host_alias"
             rm -f "$remote_tmp"
             echo "  conflict (deleted locally, modified remotely): $path → saved $path.conflict.$host_alias" >&2
