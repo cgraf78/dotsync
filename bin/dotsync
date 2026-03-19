@@ -21,7 +21,7 @@
 #   dotsync-hosts        personal host aliases (one per line)
 #   dotsync-hosts-work   work host aliases (one per line)
 #
-# State stored in $DOTSYNC_STATE_DIR (default ~/.local/share/dotsync/)
+# State stored in $DOTSYNC_STATE_DIR (default ~/.local/state/dotsync/)
 #
 # Safety invariants:
 #   - State is NEVER written unless the corresponding transfer succeeded.
@@ -41,7 +41,7 @@ if ((BASH_VERSINFO[0] < 4)); then
 fi
 
 CONF_DIR="${DOTSYNC_CONF_DIR:-$HOME/.config/dotsync}"
-STATE_DIR="${DOTSYNC_STATE_DIR:-$HOME/.local/share/dotsync}"
+STATE_DIR="${DOTSYNC_STATE_DIR:-$HOME/.local/state/dotsync}"
 LOCK_FILE="$STATE_DIR/.lock"
 SSH_TIMEOUT=1
 DRY_RUN=0
