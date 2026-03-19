@@ -124,8 +124,9 @@ _restore_local_symlinks() {
             # Only replace the file with a symlink if we can write to the target.
             # If cp fails, keep the regular file (content is more important).
             if mkdir -p "$(dirname "$resolved_target")" && cp "$HOME/$f" "$resolved_target"; then
-                rm "$HOME/$f"
-                ln -s "$target" "$HOME/$f"
+                if rm "$HOME/$f"; then
+                    ln -s "$target" "$HOME/$f" || cp "$resolved_target" "$HOME/$f"
+                fi
             fi
         fi
     done
@@ -1105,10 +1106,13 @@ _sync_host() {
                 else
                     # Push failed — restore the pre-merge local file to avoid
                     # losing the user's edits. The merge result is discarded.
-                    cp "$backup_tmp" "$HOME/$f"
-                    [[ -n "$local_links" ]] && echo "$local_links" | _restore_local_symlinks
+                    if cp "$backup_tmp" "$HOME/$f"; then
+                        [[ -n "$local_links" ]] && echo "$local_links" | _restore_local_symlinks
+                        echo "  merge push failed, local file restored: $f" >&2
+                    else
+                        echo "  merge push failed AND restore failed: $f left with merged content" >&2
+                    fi
                     had_errors=1
-                    echo "  merge push failed, local file restored: $f" >&2
                 fi
                 rm -f "$backup_tmp"
             else
