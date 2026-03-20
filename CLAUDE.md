@@ -63,6 +63,13 @@ Tests source `bin/dotsync` with `DOTSYNC_SOURCED=1` to access internal functions
 
 - `DOTSYNC_SOURCED=1` exports functions without running arg parsing.
 - All remote commands use `$HOME` (literal `$` via `\$HOME`) so the remote shell expands it.
-- PID-based lock file (`$STATE_DIR/.lock`) prevents concurrent runs.
+- Atomic lock directory (`$STATE_DIR/.lock/`) with PID file prevents concurrent runs.
 - Exit codes: 0=success, 1=conflicts, 2=errors.
 - Host SSH destinations are resolved via `ssh -G <host>` to honor `~/.ssh/config`.
+
+## Releasing
+
+1. Bump `VERSION` file, commit, push to main.
+2. Tag and push: `git tag v<version> && git push origin v<version>`
+3. The release workflow (`.github/workflows/release.yml`) runs tests, creates a tarball, and publishes the GitHub release automatically.
+4. Optionally edit the release notes via `gh release edit v<version> --notes-file <file>`.
