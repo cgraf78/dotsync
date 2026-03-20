@@ -744,6 +744,8 @@ _do_hosts() {
 # Does not propagate deletions — only transfers existing files.
 # Updates stored state on success so subsequent syncs have correct baselines.
 # Respects tier filtering: work paths are only pushed to work-tier hosts.
+# Overwrites remote unconditionally — use push instead of sync when you
+# want to establish local as the source of truth without conflict detection.
 _do_push() {
     local host_arg="$1"
     local dest tier resolved
@@ -856,9 +858,9 @@ _do_pull() {
 #   FIRST SYNC (no stored state):
 #     - File on one side only → propagate to the other side
 #     - File on both sides, same content → establish baseline (no transfer)
-#     - File on both sides, different → LOCAL WINS (push to remote)
-#       This is a deliberate policy choice: on first contact with a new host,
-#       the machine running the sync is treated as the source of truth.
+#     - File on both sides, different → CONFLICT
+#       Local is pushed to remote, but the remote's original content is saved
+#       as .conflict.<host> locally so the user can review what was overwritten.
 #
 #   SUBSEQUENT SYNCS (stored state exists):
 #     - Neither changed → skip
@@ -997,7 +999,11 @@ _sync_host() {
                     _save_state "$host_alias" "$f" "$HOME/$f" "$local_md5"
                 fi
             else
-                push_files+=("$f")                  # both exist, different → local wins
+                # Both exist, different content, no baseline — conflict.
+                # Push local to remote but save remote's version as conflict
+                # file so the user can review what was overwritten.
+                conflict_files+=("FIRSTSYNC $f")
+                had_conflicts=1
             fi
             continue
         fi
@@ -1216,7 +1222,32 @@ _sync_host() {
 
     for c in "${conflict_files[@]+"${conflict_files[@]}"}"; do
         local kind="${c%% *}" path="${c#* }"
-        if [[ "$kind" == "DELMOD" ]]; then
+        if [[ "$kind" == "FIRSTSYNC" ]]; then
+            # Both sides exist with different content, no baseline.
+            # Save remote version as conflict file, then push local to remote.
+            local remote_tmp
+            remote_tmp=$(mktemp)
+            if rsync -azL --no-owner --no-group "$dest:$path" "$remote_tmp" 2>/dev/null; then
+                cp "$remote_tmp" "$HOME/$path.conflict.$host_alias"
+                echo "  conflict (first sync, both differ): $path → saved $path.conflict.$host_alias" >&2
+            else
+                had_errors=1
+                echo "  conflict (first sync, both differ): $path → failed to fetch remote" >&2
+                rm -f "$remote_tmp"
+                continue
+            fi
+            rm -f "$remote_tmp"
+            # Push local version to remote
+            if rsync -azL --no-owner --no-group "$HOME/$path" "$dest:$path" 2>/dev/null; then
+                local md5hash
+                md5hash=$(_md5 "$HOME/$path")
+                [[ -n "$md5hash" ]] && _save_state "$host_alias" "$path" "$HOME/$path" "$md5hash"
+                echo "  pushed: $path"
+            else
+                had_errors=1
+                echo "  conflict (first sync): $path → push failed" >&2
+            fi
+        elif [[ "$kind" == "DELMOD" ]]; then
             # Deleted locally but modified remotely — save remote version as
             # conflict file so the user can review. We don't restore the file
             # automatically because the deletion was intentional.
