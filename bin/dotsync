@@ -746,8 +746,13 @@ _do_hosts() {
 # Respects tier filtering: work paths are only pushed to work-tier hosts.
 _do_push() {
     local host_arg="$1"
-    local dest tier
+    local dest tier resolved
     dest="$host_arg"
+    resolved=$(_resolve_host "$host_arg")
+    if _is_self "$resolved"; then
+        echo "dotsync: $host_arg is the current machine, skipping"
+        return 0
+    fi
     tier=$(_host_tier "$host_arg")
     _acquire_lock
     trap '_release_lock' RETURN
@@ -791,8 +796,13 @@ _do_push() {
 # Mirror of _do_push — same safety guarantees and tier filtering.
 _do_pull() {
     local host_arg="$1"
-    local dest tier
+    local dest tier resolved
     dest="$host_arg"
+    resolved=$(_resolve_host "$host_arg")
+    if _is_self "$resolved"; then
+        echo "dotsync: $host_arg is the current machine, skipping"
+        return 0
+    fi
     tier=$(_host_tier "$host_arg")
     _acquire_lock
     trap '_release_lock' RETURN
