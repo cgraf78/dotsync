@@ -11,15 +11,11 @@ Manages dotfiles and config that need to stay consistent across hosts — automa
 
 ## Install
 
-### From release tarball
-
 ```bash
-tag=$(curl -s https://api.github.com/repos/cgraf78/dotsync/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-curl -sL "https://github.com/cgraf78/dotsync/releases/download/${tag}/dotsync-${tag}.tar.gz" | tar xz
-cd "dotsync-${tag}" && bash install.sh
+curl -sL https://raw.githubusercontent.com/cgraf78/dotsync/main/install.sh | bash
 ```
 
-### From source
+Or from source:
 
 ```bash
 git clone https://github.com/cgraf78/dotsync.git
