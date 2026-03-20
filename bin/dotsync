@@ -913,7 +913,16 @@ _sync_host() {
 
         # Gather the three data points for comparison.
         # Uses -f only (not -L) to exclude dangling symlinks.
-        [[ -f "$HOME/$f" ]] && { local_exists=1; local_md5=$(_md5 "$HOME/$f"); }
+        # Guard: if _md5 fails (e.g., permission denied), treat the file as
+        # missing to avoid saving empty-string state or false change detection.
+        if [[ -f "$HOME/$f" ]]; then
+            local_md5=$(_md5 "$HOME/$f")
+            if [[ -n "$local_md5" ]]; then
+                local_exists=1
+            else
+                echo "  warning: cannot read $f, skipping" >&2
+            fi
+        fi
         rem_md5="${remote_md5[$f]:-}"
         [[ -n "$rem_md5" ]] && remote_exists=1
         stored_md5=$(_get_stored_md5 "$host_alias" "$f")
