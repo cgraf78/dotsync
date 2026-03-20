@@ -160,7 +160,7 @@ _restore_remote_symlinks() {
     done
     [[ -z "$lines" ]] && return 0
     printf '%s' "$lines" | ssh -o ConnectTimeout="$SSH_TIMEOUT" -o BatchMode=yes \
-        "$dest" 'while IFS="	" read -r f target; do
+        "$dest" 'TAB=$(printf "\t"); while IFS="$TAB" read -r f target; do
             [ -z "$f" ] && continue
             p="$HOME/$f"
             if [ -f "$p" ] && [ ! -L "$p" ]; then
