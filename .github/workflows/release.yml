@@ -22,7 +22,7 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/}"
           tar czf "dotsync-${VERSION}.tar.gz" \
             --transform "s,^,dotsync-${VERSION}/," \
-            bin/ tests/ examples/ install.sh README.md LICENSE
+            bin/ tests/ examples/ install.sh README.md LICENSE VERSION
 
       - name: Verify tarball
         run: |
