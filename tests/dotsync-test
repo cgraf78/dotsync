@@ -287,6 +287,37 @@ else
     _pass "no false positive on unrelated host"
 fi
 
+if _is_self "127.0.0.1"; then
+    _pass "detects self by loopback IP"
+else
+    _fail "detects self by loopback IP"
+fi
+
+if _is_self "localhost"; then
+    _pass "detects self by localhost"
+else
+    _fail "detects self by localhost"
+fi
+
+# Test local IP detection (get first non-loopback IP from _local_ips)
+_LOCAL_IPS=""  # clear cache
+local_ip=$(_local_ips | head -1)
+if [[ -n "$local_ip" ]]; then
+    if _is_self "$local_ip"; then
+        _pass "detects self by local IP ($local_ip)"
+    else
+        _fail "detects self by local IP ($local_ip)"
+    fi
+else
+    _pass "detects self by local IP (skipped — no non-loopback IPs)"
+fi
+
+if _is_self "10.255.255.254"; then
+    _fail "false positive on unrelated IP"
+else
+    _pass "no false positive on unrelated IP"
+fi
+
 # ---------------------------------------------------------------------------
 # Tests: Checksum
 # ---------------------------------------------------------------------------

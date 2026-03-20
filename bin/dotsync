@@ -404,9 +404,28 @@ _resolve_host() {
 # Self-detection
 # ---------------------------------------------------------------------------
 
+# Collect local IP addresses (IPv4 only, excluding loopback).
+# Uses hostname -I (Linux) or ifconfig (macOS/BSD). Result is cached
+# in _LOCAL_IPS to avoid repeated subprocess calls during sync.
+_local_ips() {
+    if [[ -n "${_LOCAL_IPS:-}" ]]; then
+        echo "$_LOCAL_IPS"
+        return 0
+    fi
+    local ips=""
+    if ips=$(hostname -I 2>/dev/null); then
+        # hostname -I returns space-separated IPs; convert to newlines
+        ips=$(echo "$ips" | tr ' ' '\n' | grep -v '^$')
+    elif command -v ifconfig &>/dev/null; then
+        ips=$(ifconfig 2>/dev/null | awk '/inet / && !/127\.0\.0\.1/ {print $2}')
+    fi
+    _LOCAL_IPS="$ips"
+    echo "$ips"
+}
+
 # Check if an SSH destination points to the current machine.
-# Compares against hostname -f (FQDN) and hostname -s (short name),
-# matching either the full destination or its short prefix.
+# Compares against hostname -f (FQDN), hostname -s (short name), and
+# local IP addresses. Handles SSH config resolving hosts to IPs.
 # Used to skip self-sync in _do_sync — syncing with yourself is a no-op.
 _is_self() {
     local dest="$1"
@@ -419,6 +438,17 @@ _is_self() {
     [[ "$dest" == "$short" ]] && return 0
     [[ "$dest_short" == "$short" ]] && return 0
     [[ "$dest_short" == "$fqdn" ]] && return 0
+    [[ "$dest" == "localhost" || "$dest" == "127.0.0.1" || "$dest" == "::1" ]] && return 0
+
+    # Check against local network IPs
+    local ips
+    ips=$(_local_ips)
+    if [[ -n "$ips" ]]; then
+        local ip
+        while IFS= read -r ip; do
+            [[ "$dest" == "$ip" ]] && return 0
+        done <<< "$ips"
+    fi
     return 1
 }
 
