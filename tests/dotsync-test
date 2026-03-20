@@ -397,16 +397,25 @@ echo ""
 echo "=== Lock file ==="
 
 _acquire_lock
-_assert_file_exists "lock file created" "$LOCK_FILE"
-lock_pid=$(cat "$LOCK_FILE")
+if [[ -d "$LOCK_FILE" ]]; then
+    _pass "lock directory created"
+else
+    _fail "lock directory created"
+fi
+lock_pid=$(cat "$LOCK_FILE/pid")
 _assert_eq "lock contains current PID" "$$" "$lock_pid"
 _release_lock
-_assert_file_missing "lock file released" "$LOCK_FILE"
+if [[ ! -d "$LOCK_FILE" ]]; then
+    _pass "lock directory released"
+else
+    _fail "lock directory released"
+fi
 
 # Stale lock detection
-echo "99999999" > "$LOCK_FILE"
+mkdir -p "$LOCK_FILE"
+echo "99999999" > "$LOCK_FILE/pid"
 _acquire_lock  # should succeed (PID 99999999 doesn't exist)
-_assert_eq "stale lock replaced with current PID" "$$" "$(cat "$LOCK_FILE")"
+_assert_eq "stale lock replaced with current PID" "$$" "$(cat "$LOCK_FILE/pid")"
 _release_lock
 
 # ---------------------------------------------------------------------------
@@ -481,6 +490,60 @@ rm -rf "$TEST_HOME/.config/linkdir" "$TEST_HOME/.link-targets"
 
 rm -f "$TEST_HOME/.bashrc_local" "$TEST_HOME/.bashrc_work" "$TEST_HOME/.bashrc_test"
 rm -rf "$TEST_HOME/.config/testdir" "$TEST_HOME/standalone" "$TEST_HOME/dangling_link"
+
+# ---------------------------------------------------------------------------
+# Tests: Path safety filter (_is_safe_path)
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Path safety filter ==="
+
+if _is_safe_path ".config/normal/file"; then
+    _pass "safe path: normal dotfile"
+else
+    _fail "safe path: normal dotfile"
+fi
+if _is_safe_path "file-with-dash_and_underscore.txt"; then
+    _pass "safe path: dashes and underscores"
+else
+    _fail "safe path: dashes and underscores"
+fi
+# shellcheck disable=SC2016  # intentional — testing literal metacharacters
+if _is_safe_path 'file$injection'; then
+    _fail "unsafe path: dollar sign not rejected"
+else
+    _pass "unsafe path: dollar sign rejected"
+fi
+# shellcheck disable=SC2016  # intentional — testing literal metacharacters
+if _is_safe_path 'file`cmd`'; then
+    _fail "unsafe path: backtick not rejected"
+else
+    _pass "unsafe path: backtick rejected"
+fi
+if _is_safe_path 'file;rm -rf /'; then
+    _fail "unsafe path: semicolon not rejected"
+else
+    _pass "unsafe path: semicolon rejected"
+fi
+if _is_safe_path "file'quote"; then
+    _fail "unsafe path: single quote not rejected"
+else
+    _pass "unsafe path: single quote rejected"
+fi
+if _is_safe_path 'file|pipe'; then
+    _fail "unsafe path: pipe not rejected"
+else
+    _pass "unsafe path: pipe rejected"
+fi
+
+# Expansion filters unsafe filenames discovered by find
+mkdir -p "$TEST_HOME/.config/unsafedir"
+echo "safe" > "$TEST_HOME/.config/unsafedir/normal_file"
+touch "$TEST_HOME/.config/unsafedir/has\$dollar"
+result=$(_expand_paths_local "$TEST_HOME" ".config/unsafedir" 2>/dev/null)
+_assert_contains "expansion includes safe file" "normal_file" "$result"
+_assert_not_contains "expansion excludes unsafe file" "dollar" "$result"
+rm -rf "$TEST_HOME/.config/unsafedir"
 
 # ---------------------------------------------------------------------------
 # Tests: list and hosts commands

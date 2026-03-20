@@ -437,11 +437,23 @@ _ssh_probe() {
 # Path expansion (directories → files)
 # ---------------------------------------------------------------------------
 
+# Check if a path contains shell metacharacters that would be unsafe to
+# interpolate into remote SSH commands. Returns 0 (true) if the path is
+# safe, 1 if it contains dangerous characters. Used to filter paths
+# discovered via directory expansion (which bypasses _load_paths validation).
+_is_safe_path() {
+    # Same metacharacter set as _load_paths (line 269), minus glob chars.
+    [[ ! "$1" =~ [\$\`\|\;\&\<\>\'\"\\\] ]]
+}
+
 # Expand manifest entries to individual files on the local filesystem.
 # Files pass through as-is. Directories are recursively expanded.
 # Glob patterns (containing * or ?) are expanded via bash globbing.
 # Symlinks to files are included; symlinks to directories are not expanded.
 # Dangling symlinks and missing paths are silently skipped.
+# Paths with shell metacharacters are rejected (discovered files bypass
+# _load_paths validation, so we filter here to prevent injection in
+# remote SSH commands).
 # Returns paths relative to $base.
 _expand_paths_local() {
     local base="$1"; shift
@@ -454,17 +466,23 @@ _expand_paths_local() {
                 local rel="${match#"$base"/}"
                 if [[ -d "$match" ]]; then
                     find "$match" \( -type f -o -type l \) 2>/dev/null | while IFS= read -r fpath; do
-                        if [[ -f "$fpath" ]]; then echo "${fpath#"$base"/}"; fi
+                        local r="${fpath#"$base"/}"
+                        if [[ -f "$fpath" ]]; then
+                            if _is_safe_path "$r"; then echo "$r"; else echo "dotsync: ignoring expanded path with shell metacharacters: $r" >&2; fi
+                        fi
                     done
                 elif [[ -f "$match" ]]; then
-                    echo "$rel"
+                    if _is_safe_path "$rel"; then echo "$rel"; else echo "dotsync: ignoring expanded path with shell metacharacters: $rel" >&2; fi
                 fi
             done
             continue
         fi
         if [[ -d "$base/$p" ]]; then
             find "$base/$p" \( -type f -o -type l \) 2>/dev/null | while IFS= read -r fpath; do
-                if [[ -f "$fpath" ]]; then echo "${fpath#"$base"/}"; fi
+                local r="${fpath#"$base"/}"
+                if [[ -f "$fpath" ]]; then
+                    if _is_safe_path "$r"; then echo "$r"; else echo "dotsync: ignoring expanded path with shell metacharacters: $r" >&2; fi
+                fi
             done
         elif [[ -f "$base/$p" ]]; then
             echo "$p"
@@ -475,6 +493,8 @@ _expand_paths_local() {
 # Expand manifest entries to individual files on a remote host via SSH.
 # Same logic as _expand_paths_local but runs remotely.
 # Glob patterns are expanded by the remote shell.
+# Paths with shell metacharacters are filtered on return (remote find may
+# discover filenames that bypass _load_paths validation).
 # Returns paths relative to remote $HOME.
 _expand_paths_remote() {
     local dest="$1"; shift
@@ -488,7 +508,9 @@ _expand_paths_remote() {
             cmds+="if [ -d \"\$HOME/$p\" ]; then find \"\$HOME/$p\" \\( -type f -o -type l \\) 2>/dev/null | while IFS= read -r fpath; do if [ -f \"\$fpath\" ]; then echo \"\${fpath#\$HOME/}\"; fi; done; elif [ -f \"\$HOME/$p\" ]; then echo \"$p\"; fi; "
         fi
     done
-    ssh -o ConnectTimeout=$SSH_TIMEOUT -o BatchMode=yes "$dest" "$cmds" 2>/dev/null || true
+    ssh -o ConnectTimeout=$SSH_TIMEOUT -o BatchMode=yes "$dest" "$cmds" 2>/dev/null | while IFS= read -r line; do
+        if _is_safe_path "$line"; then echo "$line"; else echo "dotsync: ignoring remote expanded path with shell metacharacters: $line" >&2; fi
+    done
 }
 
 # Deduplicate and sort a stream of file paths.
@@ -556,24 +578,34 @@ _remove_state() {
 # ---------------------------------------------------------------------------
 
 # Acquire an exclusive lock. Prevents concurrent dotsync operations from
-# corrupting state. Uses PID-based stale detection — if the PID in the
-# lock file is no longer running, the lock is treated as stale and removed.
+# corrupting state. Uses mkdir for atomic creation and PID-based stale
+# detection — if the PID in the lock directory is no longer running, the
+# lock is treated as stale and replaced.
 _acquire_lock() {
     mkdir -p "$STATE_DIR"
-    if [[ -f "$LOCK_FILE" ]]; then
-        local pid
-        pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            echo "dotsync: another instance is running (PID $pid)" >&2
-            exit 1
-        fi
-        rm -f "$LOCK_FILE"
+    if mkdir "$LOCK_FILE" 2>/dev/null; then
+        echo $$ > "$LOCK_FILE/pid"
+        return 0
     fi
-    echo $$ > "$LOCK_FILE"
+    # Lock exists — check for stale PID
+    local pid
+    pid=$(cat "$LOCK_FILE/pid" 2>/dev/null || echo "")
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        echo "dotsync: another instance is running (PID $pid)" >&2
+        exit 1
+    fi
+    # Stale lock — remove and re-acquire
+    rm -rf "$LOCK_FILE"
+    if mkdir "$LOCK_FILE" 2>/dev/null; then
+        echo $$ > "$LOCK_FILE/pid"
+        return 0
+    fi
+    echo "dotsync: failed to acquire lock" >&2
+    exit 1
 }
 
 _release_lock() {
-    rm -f "$LOCK_FILE"
+    rm -rf "$LOCK_FILE"
 }
 
 # ---------------------------------------------------------------------------
