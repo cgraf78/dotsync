@@ -918,6 +918,70 @@ EOF
         _assert_not_contains "self host skipped from sync" "self ($local_fqdn):" "$result"
         _assert_contains "non-self host synced" "testhost" "$result"
 
+        # ---------------------------------------------------------------
+        echo ""
+        echo "  --- Propagation pass (two-pass sync) ---"
+
+        # Stub tests: override _sync_host, _is_self, and _ssh_probe to
+        # test _do_sync's orchestration logic without real SSH transfers.
+        # With localhost, local=remote so a real pull can't be triggered;
+        # stubs let us simulate the flag-setting that a pull would cause.
+        _saved_is_self=$(declare -f _is_self)
+        _saved_ssh_probe=$(declare -f _ssh_probe)
+        _saved_sync_host=$(declare -f _sync_host)
+
+        _is_self() { return 1; }    # no host is "self"
+        _ssh_probe() { return 0; }  # all hosts reachable
+
+        cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
+prophost1
+prophost2
+EOF
+        mkdir -p "$HOME/$TEST_REL"
+        echo "propagation" > "$HOME/$TEST_REL/file_a"
+        cat > "$CONF_DIR/dotsync-paths" <<EOF
+$TEST_REL/file_a
+EOF
+
+        # Test: second pass triggers when first-pass _sync_host sets flag
+        _prop_call=0
+        _sync_host() {
+            ((_prop_call++)) || true
+            [[ $_prop_call -eq 1 ]] && _DOTSYNC_ANY_PULLED=1
+            return 0
+        }
+        _prop_call=0
+        result=$(_do_sync 2>&1)
+        _assert_contains "propagation pass triggered after pull" \
+            "Propagating pulled changes" "$result"
+
+        # Test: no second pass when nothing was pulled
+        _sync_host() { return 0; }
+        result=$(_do_sync 2>&1)
+        _assert_not_contains "no propagation when nothing pulled" \
+            "Propagating pulled changes" "$result"
+
+        # Test: dry-run skips second pass even if flag would be set
+        _sync_host() { _DOTSYNC_ANY_PULLED=1; return 0; }
+        DRY_RUN=1
+        result=$(_do_sync 2>&1)
+        DRY_RUN=0
+        _assert_not_contains "dry-run skips propagation" \
+            "Propagating pulled changes" "$result"
+
+        # Test: stale flag from prior context doesn't trigger second pass
+        _sync_host() { return 0; }
+        _DOTSYNC_ANY_PULLED=1
+        result=$(_do_sync 2>&1)
+        _DOTSYNC_ANY_PULLED=0
+        _assert_not_contains "stale flag reset at sync start" \
+            "Propagating pulled changes" "$result"
+
+        # Restore original functions
+        eval "$_saved_sync_host"
+        eval "$_saved_ssh_probe"
+        eval "$_saved_is_self"
+
         # Cleanup integration test files
         rm -rf "${HOME:?}/${TEST_REL:?}"
         rm -f "$INT_SSH_CONFIG"

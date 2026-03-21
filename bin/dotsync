@@ -1103,6 +1103,7 @@ _sync_host() {
                 [[ -n "$md5hash" ]] && _save_state "$host_alias" "$f" "$HOME/$f" "$md5hash"
                 echo "  pulled: $f"
             done
+            _DOTSYNC_ANY_PULLED=1
         else
             had_errors=1
             echo "  pull failed" >&2
@@ -1306,9 +1307,16 @@ _do_diff() {
 # Bidirectional sync across all configured hosts.
 # Skips unreachable hosts (1s SSH timeout) and the current machine.
 # Designed for unattended cron use — no interactive prompts.
+#
+# Two-pass propagation: if any files are pulled from remotes during the
+# first pass, a second pass pushes those changes to hosts that were
+# synced before the pull occurred. This ensures a change made on any
+# host reaches all other hosts in a single sync invocation.
 _do_sync() {
     _acquire_lock
     trap '_release_lock' RETURN
+
+    _DOTSYNC_ANY_PULLED=0
 
     local synced=() skipped=() conflicted=() errored=()
     local exit_code=0
@@ -1365,6 +1373,34 @@ _do_sync() {
             [[ $exit_code -lt 2 ]] && exit_code=2
         fi
     done
+
+    # Second pass: if any files were pulled from remotes during the first
+    # pass, propagate them to hosts that were synced before the pull.
+    # Reuses the same reachability results — hosts don't need re-probing.
+    # Skipped in dry-run mode (no state was updated, so there's nothing
+    # new to propagate).
+    if [[ $_DOTSYNC_ANY_PULLED -eq 1 && $DRY_RUN -eq 0 ]]; then
+        echo ""
+        echo "Propagating pulled changes:"
+        _DOTSYNC_ANY_PULLED=0
+        for i in "${!hosts_aliases[@]}"; do
+            local alias="${hosts_aliases[$i]}" resolved="${resolved_hosts[$i]}"
+            if [[ -z "${probe_results[$i]:-}" ]]; then
+                continue
+            fi
+            echo "$alias ($resolved):"
+            local tier rc=0
+            tier=$(_host_tier "$alias")
+            _sync_host "$alias" "$alias" "$tier" 0 || rc=$?
+            if [[ $rc -eq 1 ]]; then
+                [[ " ${conflicted[*]:-} " != *" $alias "* ]] && conflicted+=("$alias")
+                [[ $exit_code -lt 1 ]] && exit_code=1
+            elif [[ $rc -eq 2 ]]; then
+                [[ " ${errored[*]:-} " != *" $alias "* ]] && errored+=("$alias")
+                [[ $exit_code -lt 2 ]] && exit_code=2
+            fi
+        done
+    fi
 
     echo ""
     [[ ${#synced[@]} -gt 0 ]] && echo "synced: ${synced[*]}"
