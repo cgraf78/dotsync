@@ -22,7 +22,7 @@ shellcheck -x -P tests tests/dotsync-test tests/test-helpers.sh
 
 ## Architecture
 
-Single-file CLI (`bin/dotsync`, ~1350 lines of bash 4+). No plugins — all logic is self-contained.
+Single-file CLI (`bin/dotsync`, ~1530 lines of bash 4+). No plugins — all logic is self-contained.
 
 ### Config layer
 
@@ -48,6 +48,8 @@ State lives under `$DOTSYNC_STATE_DIR` (default `~/.local/state/dotsync/`), orga
 ### Sync algorithm (`_sync_host`)
 
 The core bidirectional sync compares local md5, remote md5, and stored state md5 to classify each file into one of: push, pull, both-changed-same, conflict (3-way merge for text, `.conflict.<host>` copy for binary), or deletion propagation. The `_resolve_local_files` / `_resolve_remote_files` functions expand directories, apply excludes, and compute checksums.
+
+`_do_sync` uses a two-pass strategy: the first pass syncs all hosts in sequence; if any files were pulled during that pass (`_DOTSYNC_ANY_PULLED` flag), a second pass pushes those changes to hosts that were processed before the pull occurred. This ensures a change on any host reaches all other hosts in a single invocation.
 
 Remote checksums are computed via a fixed `REMOTE_MD5_SCRIPT` piped over SSH to avoid command-length limits.
 

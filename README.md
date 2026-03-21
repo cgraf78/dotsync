@@ -119,7 +119,7 @@ Simple one-way rsync. Does not propagate deletions. Updates sync state for subse
 
 ### sync
 
-Bidirectional sync with conflict detection:
+Bidirectional sync with conflict detection. If any host pushes a change during a sync run, a second pass automatically propagates it to all other hosts — so a change on any machine reaches every machine in a single `dotsync sync` invocation.
 
 | Local | Remote | Action |
 |-------|--------|--------|
@@ -145,7 +145,7 @@ Symlinks are preserved transparently. Content is read/written through symlinks w
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DOTSYNC_CONF_DIR` | `~/.config/dotsync` | Config directory |
-| `DOTSYNC_STATE_DIR` | `~/.local/share/dotsync` | Sync state directory |
+| `DOTSYNC_STATE_DIR` | `~/.local/state/dotsync` | Sync state directory |
 
 ## Cron Usage
 
