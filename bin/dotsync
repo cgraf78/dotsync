@@ -5,6 +5,7 @@
 # keeping your shell environment consistent on every machine.
 #
 # Usage: dotsync push <host>   rsync listed files TO host
+#        dotsync push --all    rsync listed files TO all reachable hosts
 #        dotsync pull <host>   rsync listed files FROM host
 #        dotsync sync          bidirectional sync with all reachable hosts
 #        dotsync diff <host>   dry-run showing what sync would do
@@ -740,13 +741,9 @@ _do_hosts() {
     fi
 }
 
-# One-way push: rsync all manifest files from local to remote.
-# Does not propagate deletions — only transfers existing files.
-# Updates stored state on success so subsequent syncs have correct baselines.
-# Respects tier filtering: work paths are only pushed to work-tier hosts.
-# Overwrites remote unconditionally — use push instead of sync when you
-# want to establish local as the source of truth without conflict detection.
-_do_push() {
+# One-way push implementation for a single host.
+# Caller is responsible for acquiring the global lock.
+_do_push_host() {
     local host_arg="$1"
     local dest tier resolved
     dest="$host_arg"
@@ -756,8 +753,6 @@ _do_push() {
         return 0
     fi
     tier=$(_host_tier "$host_arg")
-    _acquire_lock
-    trap '_release_lock' RETURN
 
     local files_arr=()
     while IFS= read -r f; do
@@ -792,6 +787,84 @@ _do_push() {
         echo "push failed" >&2
         return 2
     fi
+}
+
+# One-way push: rsync all manifest files from local to remote.
+# Does not propagate deletions — only transfers existing files.
+# Updates stored state on success so subsequent syncs have correct baselines.
+# Respects tier filtering: work paths are only pushed to work-tier hosts.
+# Overwrites remote unconditionally — use push instead of sync when you
+# want to establish local as the source of truth without conflict detection.
+_do_push() {
+    _acquire_lock
+    trap '_release_lock' RETURN
+    _do_push_host "$1"
+}
+
+# One-way push across all configured reachable hosts.
+# Skips unreachable hosts and the current machine. Continues on per-host
+# errors so one failed push does not abort the whole batch.
+_do_push_all() {
+    local pushed=() skipped=() errored=()
+    local exit_code=0
+
+    _acquire_lock
+    trap '_release_lock' RETURN
+
+    local hosts_aliases=() resolved_hosts=()
+    while IFS= read -r a; do
+        [[ -z "$a" ]] && continue
+        local r
+        r=$(_resolve_host "$a")
+        _is_self "$r" && continue
+        hosts_aliases+=("$a")
+        resolved_hosts+=("$r")
+    done < <(_load_hosts)
+
+    if [[ ${#hosts_aliases[@]} -eq 0 ]]; then
+        echo "dotsync: no non-self hosts configured"
+        return 0
+    fi
+
+    declare -A probe_results=()
+    if [[ $DRY_RUN -eq 0 ]]; then
+        local probe_pids=()
+        for i in "${!hosts_aliases[@]}"; do
+            ( _ssh_probe "${hosts_aliases[$i]}" ) &
+            probe_pids+=("$!:$i")
+        done
+        for entry in "${probe_pids[@]}"; do
+            local pid="${entry%%:*}" idx="${entry#*:}"
+            if wait "$pid" 2>/dev/null; then
+                probe_results[$idx]=1
+            fi
+        done
+    fi
+
+    for i in "${!hosts_aliases[@]}"; do
+        local alias="${hosts_aliases[$i]}" resolved="${resolved_hosts[$i]}"
+        if [[ $DRY_RUN -eq 0 && -z "${probe_results[$i]:-}" ]]; then
+            skipped+=("$alias")
+            continue
+        fi
+
+        echo "$alias ($resolved):"
+        local rc=0
+        _do_push_host "$alias" || rc=$?
+        if [[ $rc -eq 0 ]]; then
+            pushed+=("$alias")
+        else
+            errored+=("$alias")
+            exit_code=2
+        fi
+    done
+
+    echo ""
+    [[ ${#pushed[@]} -gt 0 ]] && echo "pushed: ${pushed[*]}"
+    [[ ${#skipped[@]} -gt 0 ]] && echo "skipped: ${skipped[*]} (unreachable)"
+    [[ ${#errored[@]} -gt 0 ]] && echo "errors: ${errored[*]}" >&2
+
+    return $exit_code
 }
 
 # One-way pull: rsync all manifest files from remote to local.
@@ -1417,6 +1490,7 @@ _do_sync() {
 
 _usage() {
     echo "Usage: dotsync push <host>   rsync listed files TO host"
+    echo "       dotsync push --all    rsync listed files TO all reachable hosts"
     echo "       dotsync pull <host>   rsync listed files FROM host"
     echo "       dotsync sync          bidirectional sync with all reachable hosts"
     echo "       dotsync diff <host>   dry-run showing what sync would do"
@@ -1464,6 +1538,9 @@ _dotsync() {
                     hosts+=" $host"
                 done < "$f"
             done
+            if [[ "$subcmd" == "push" ]]; then
+                hosts+=" --all"
+            fi
             COMPREPLY=($(compgen -W "$hosts" -- "$cur"))
             ;;
         "")
@@ -1501,7 +1578,11 @@ set -- "${args[@]+"${args[@]}"}"
 case "${1:-}" in
     push)
         [[ -z "${2:-}" ]] && { _usage >&2; exit 1; }
-        _do_push "$2"
+        if [[ "${2:-}" == "--all" ]]; then
+            _do_push_all
+        else
+            _do_push "$2"
+        fi
         ;;
     pull)
         [[ -z "${2:-}" ]] && { _usage >&2; exit 1; }

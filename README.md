@@ -31,6 +31,7 @@ echo ".bashrc" >> ~/.config/dotsync/dotsync-paths
 
 # Sync
 dotsync push server1          # one-way push
+dotsync push --all            # one-way push to all reachable hosts
 dotsync pull server1          # one-way pull
 dotsync sync                  # bidirectional sync with all reachable hosts
 ```
@@ -46,6 +47,7 @@ dotsync sync                  # bidirectional sync with all reachable hosts
 
 ```
 dotsync push <host>     rsync listed files TO host
+dotsync push --all      rsync listed files TO all reachable hosts
 dotsync pull <host>     rsync listed files FROM host
 dotsync sync            bidirectional sync with all reachable hosts
 dotsync diff <host>     dry-run showing what sync would do
@@ -116,6 +118,10 @@ Work paths are **never** synced to personal-tier hosts.
 ### push / pull
 
 Simple one-way rsync. Does not propagate deletions. Updates sync state for subsequent `sync` calls.
+
+`push --all` applies the same one-way push behavior across all configured
+reachable non-self hosts and continues past per-host failures, summarizing
+skipped/unreachable and errored hosts at the end.
 
 ### sync
 

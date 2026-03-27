@@ -891,6 +891,90 @@ EOF
 
         # ---------------------------------------------------------------
         echo ""
+        echo "  --- Push --all orchestration ---"
+
+        _saved_is_self=$(declare -f _is_self)
+        _saved_ssh_probe=$(declare -f _ssh_probe)
+        _saved_do_push_host=$(declare -f _do_push_host)
+        _saved_acquire_lock=$(declare -f _acquire_lock)
+        _saved_release_lock=$(declare -f _release_lock)
+
+        _is_self() { return 1; }    # no host is "self"
+        _ssh_probe() {
+            [[ "$1" == "pushhost2" ]] && return 1
+            return 0
+        }
+        _do_push_host() {
+            [[ "$1" == "pushhost3" ]] && return 2
+            echo "push stub: $1"
+            return 0
+        }
+
+        cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
+pushhost1
+pushhost2
+pushhost3
+EOF
+
+        result=$(_do_push_all 2>&1 || true)
+        _assert_contains "push --all runs reachable host" "pushhost1" "$result"
+        _assert_contains "push --all skips unreachable host in summary" "skipped: pushhost2 (unreachable)" "$result"
+        _assert_contains "push --all reports errored host" "errors: pushhost3" "$result"
+
+        _ssh_probe() { return 1; }
+        _do_push_host() {
+            echo "dry-run push stub: $1"
+            return 0
+        }
+        DRY_RUN=1
+        result=$(_do_push_all 2>&1)
+        DRY_RUN=0
+        _assert_contains "push --all dry-run includes host even when offline" "pushhost1" "$result"
+        _assert_not_contains "push --all dry-run does not mark unreachable" "skipped:" "$result"
+
+        _is_self() {
+            [[ "$1" == "self.example" ]] && return 0
+            return 1
+        }
+        _ssh_probe() { return 0; }
+        _do_push_host() {
+            echo "push stub: $1"
+            return 0
+        }
+
+        cat > "$INT_SSH_CONFIG" <<'EOF'
+Host selfpush
+    Hostname self.example
+
+Host otherpush
+    Hostname other.example
+EOF
+        cat > "$CONF_DIR/dotsync-hosts" <<'EOF'
+selfpush
+otherpush
+EOF
+
+        result=$(_do_push_all 2>&1)
+        _assert_not_contains "push --all skips self host" "selfpush" "$result"
+        _assert_contains "push --all includes non-self host" "otherpush" "$result"
+
+        _lock_acquires=0
+        _lock_releases=0
+        _acquire_lock() { ((_lock_acquires++)) || true; }
+        _release_lock() { ((_lock_releases++)) || true; }
+        _do_push_host() { return 0; }
+        result=$(_do_push_all 2>&1)
+        _assert_eq "push --all acquires lock once" "1" "$_lock_acquires"
+        _assert_eq "push --all releases lock once" "1" "$_lock_releases"
+
+        eval "$_saved_is_self"
+        eval "$_saved_ssh_probe"
+        eval "$_saved_do_push_host"
+        eval "$_saved_acquire_lock"
+        eval "$_saved_release_lock"
+
+        # ---------------------------------------------------------------
+        echo ""
         echo "  --- Diff command ---"
 
         rm -rf "$INT_STATE/testhost"
